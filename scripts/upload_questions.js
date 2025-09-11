@@ -2,7 +2,7 @@
 /**
  * Upload prepared questions to Supabase database.
  * 
- * This script reads the prepared questions from math_questions_prepared.jsonl
+ * This script reads the prepared questions from JSONL files (math or reading/writing)
  * and uploads them to the Supabase database, creating necessary test and module
  * records first.
  */
@@ -17,7 +17,8 @@ const pool = require('../config/db');
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    input: 'public/math_questions_prepared.jsonl',
+    type: 'math',
+    input: null,
     limit: null,
     testName: 'SAT Math Practice Test',
     dryRun: false
@@ -25,6 +26,14 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
+      case '--type':
+        const type = args[++i];
+        if (type !== 'math' && type !== 'rw') {
+          console.error('Error: --type must be either "math" or "rw"');
+          process.exit(1);
+        }
+        options.type = type;
+        break;
       case '--input':
         options.input = args[++i];
         break;
@@ -42,20 +51,35 @@ function parseArgs() {
 Usage: node scripts/upload_questions.js [options]
 
 Options:
-  --input <file>     Input JSONL file path (default: public/math_questions_prepared.jsonl)
+  --type <type>      Question type: 'math' for math questions, 'rw' for reading/writing questions (default: math)
+  --input <file>     Input JSONL file path (defaults based on question type)
   --limit <number>   Limit number of questions to upload
   --test-name <name> Name for the test to create (default: "SAT Math Practice Test")
   --dry-run          Show what would be uploaded without actually uploading
   --help             Show this help message
 
 Examples:
-  node scripts/upload_questions.js --dry-run --limit 5
-  node scripts/upload_questions.js --limit 10
+  node scripts/upload_questions.js --type math --dry-run --limit 5
+  node scripts/upload_questions.js --type rw --limit 10
   node scripts/upload_questions.js --test-name "My SAT Practice Test"
         `);
         process.exit(0);
         break;
     }
+  }
+
+  // Set default input path based on question type
+  if (!options.input) {
+    if (options.type === 'math') {
+      options.input = 'public/math_questions_prepared.jsonl';
+    } else { // rw
+      options.input = 'public/rw_questions_prepared.jsonl';
+    }
+  }
+
+  // Set default test name based on question type
+  if (options.testName === 'SAT Math Practice Test' && options.type === 'rw') {
+    options.testName = 'SAT Reading/Writing Practice Test';
   }
 
   return options;
@@ -196,8 +220,15 @@ async function uploadQuestions(questions, limit = null) {
 
     console.log(`Upload complete: ${uploadedCount} questions uploaded, ${skippedCount} skipped`);
 
+  } catch (error) {
+    console.error(`Database error during upload: ${error.message}`);
+    throw error;
   } finally {
-    client.release();
+    try {
+      client.release();
+    } catch (releaseError) {
+      console.error('Error releasing client:', releaseError.message);
+    }
   }
 }
 
@@ -223,6 +254,7 @@ function showDryRun(questions, limit = null) {
  */
 async function main() {
   const options = parseArgs();
+  let poolUsed = false;
 
   try {
     // Load questions
@@ -241,6 +273,7 @@ async function main() {
     // Connect to database and verify schema
     console.log('Connecting to database...');
     await verifyDatabase();
+    poolUsed = true;
 
     // Upload questions directly (no test/module creation needed)
     await uploadQuestions(questions, options.limit);
@@ -249,10 +282,20 @@ async function main() {
 
   } catch (error) {
     console.error(`Error: ${error.message}`);
-    process.exit(1);
+    // Don't exit immediately, let the finally block handle cleanup
+    throw error;
   } finally {
-    // Close the pool
-    await pool.end();
+    // Only close the pool if it was actually used
+    if (poolUsed) {
+      try {
+        console.log('Closing database connection...');
+        await pool.end();
+        console.log('Database connection closed successfully');
+      } catch (poolError) {
+        console.error('Error closing database pool:', poolError.message);
+        // Don't throw here, just log the error
+      }
+    }
   }
 }
 

@@ -61,3 +61,8 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+public/math_questions_prepared.jsonl
+public/rw_questions_prepared.jsonl
+public/math_questions.jsonl
+public/rw_questions.jsonl

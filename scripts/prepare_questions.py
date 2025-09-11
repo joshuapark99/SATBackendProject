@@ -79,13 +79,28 @@ def extract_question_content(question_content: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prepare math_questions JSONL to simpler schema (pandas)")
-    parser.add_argument("--input", default=os.path.join("public", "math_questions.jsonl"))
-    parser.add_argument("--output", default=os.path.join("public", "math_questions_prepared.jsonl"))
+    parser = argparse.ArgumentParser(description="Prepare SAT questions JSONL to simpler schema (pandas) - supports both math and reading/writing questions")
+    parser.add_argument("--type", choices=["math", "rw"], default="math", 
+                       help="Question type: 'math' for math questions, 'rw' for reading/writing questions (default: math)")
+    parser.add_argument("--input", help="Input JSONL file path (defaults based on question type)")
+    parser.add_argument("--output", help="Output JSONL file path (defaults based on question type)")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--id")
     parser.add_argument("--index", type=int)
     args = parser.parse_args()
+    
+    # Set default input/output paths based on question type
+    if not args.input:
+        if args.type == "math":
+            args.input = os.path.join("public", "math_questions.jsonl")
+        else:  # rw
+            args.input = os.path.join("public", "rw_questions.jsonl")
+    
+    if not args.output:
+        if args.type == "math":
+            args.output = os.path.join("public", "math_questions_prepared.jsonl")
+        else:  # rw
+            args.output = os.path.join("public", "rw_questions_prepared.jsonl")
 
     if not os.path.exists(args.input):
         print(f"Input not found: {args.input}")
