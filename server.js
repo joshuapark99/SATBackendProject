@@ -6,8 +6,7 @@ const pool = require('./config/db');
 require('dotenv').config();
 
 // Import routes
-// const usersRouter = require('./routes/users');
-const questionRouter = require('./routes/questionRoutes');
+const apiRouter = require('./routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,8 +30,7 @@ app.get("/health", async (req, res) => {
 
 
 // API routes
-//app.use('/api/users', usersRouter);
-app.use('/api/v1/testing/question', questionRouter);
+app.use('/api', apiRouter);
 
 // 404 handler
 app.use('*', (req, res) => {

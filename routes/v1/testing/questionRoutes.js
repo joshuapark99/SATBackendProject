@@ -1,6 +1,6 @@
 const express = require('express');
-const QuestionController = require('../controllers/questionController');
-const { validateQuestion, sanitizeInput, validateUUID, validateAltId } = require('../middleware/validation');
+const QuestionController = require('../../../controllers/questionController');
+const { validateQuestion, sanitizeInput, validateUUID, validateAltId } = require('../../../middleware/validation');
 
 const router = express.Router();
 
