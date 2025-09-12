@@ -9,7 +9,8 @@
     "migrate": "node scripts/migrate.js",
     "prep:math": "python scripts/prepare_math_questions.py --input public/math_questions.jsonl --output public/math_questions_prepared.jsonl",
     "upload:questions": "node scripts/upload_questions.js",
-    "reset:db": "node scripts/reset_database.js"
+    "reset:db": "node scripts/reset_database.js",
+    "create:sample": "node scripts/create_sample_test.js"
   },
   "keywords": [
     "express",
