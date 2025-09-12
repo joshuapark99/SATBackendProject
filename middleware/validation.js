@@ -148,9 +148,25 @@ const validateAltId = (req, res, next) => {
   next();
 };
 
+// Validate test access code format
+const validateTestCode = (req, res, next) => {
+  const { code } = req.params;
+  const testCodeRegex = /^[A-Z0-9]{6}$/;
+  
+  if (code && !testCodeRegex.test(code)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid test code format. Must be exactly 6 uppercase alphanumeric characters.'
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   validateQuestion,
   sanitizeInput,
   validateUUID,
-  validateAltId
+  validateAltId,
+  validateTestCode
 };
