@@ -587,8 +587,7 @@ The `prepare_questions.py` script processes raw question data for database uploa
 
 **Basic Usage:**
 ```bash
-# Prepare math questions (default)
-npm run prep:math
+
 
 # Or manually
 python scripts/prepare_questions.py
