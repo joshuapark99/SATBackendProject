@@ -11,7 +11,6 @@
     "upload:questions": "node scripts/upload_questions.js",
     "reset:db": "node scripts/reset_database.js",
     "create:sample": "node scripts/create_sample_test.js",
-    "test:endpoints": "node scripts/test_endpoints.js",
     "test:endpoints:auth": "node scripts/test_endpoints_with_auth.js"
   },
   "keywords": [
