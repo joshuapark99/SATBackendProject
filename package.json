@@ -10,7 +10,9 @@
     "prep:math": "python scripts/prepare_math_questions.py --input public/math_questions.jsonl --output public/math_questions_prepared.jsonl",
     "upload:questions": "node scripts/upload_questions.js",
     "reset:db": "node scripts/reset_database.js",
-    "create:sample": "node scripts/create_sample_test.js"
+    "create:sample": "node scripts/create_sample_test.js",
+    "test:endpoints": "node scripts/test_endpoints.js",
+    "test:endpoints:auth": "node scripts/test_endpoints_with_auth.js"
   },
   "keywords": [
     "express",
@@ -22,6 +24,7 @@
   "license": "ISC",
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",
+    "axios": "^1.12.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",

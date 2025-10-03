@@ -163,10 +163,112 @@ const validateTestCode = (req, res, next) => {
   next();
 };
 
+// Validate submission creation data
+const validateSubmissionCreate = (req, res, next) => {
+  const { testId, initialModuleId } = req.body;
+  const errors = [];
+
+  // Note: userId is now obtained from req.user.id (auth middleware), not from body
+
+  if (!testId) {
+    errors.push('testId is required');
+  }
+
+  if (!initialModuleId) {
+    errors.push('initialModuleId is required');
+  }
+
+  // Validate UUIDs
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  
+  if (testId && !uuidRegex.test(testId)) {
+    errors.push('testId must be a valid UUID');
+  }
+
+  if (initialModuleId && !uuidRegex.test(initialModuleId)) {
+    errors.push('initialModuleId must be a valid UUID');
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors
+    });
+  }
+
+  next();
+};
+
+// Validate answers submission
+const validateAnswers = (req, res, next) => {
+  const { moduleId, answers } = req.body;
+  const errors = [];
+
+  if (!moduleId) {
+    errors.push('moduleId is required');
+  }
+
+  // Validate moduleId UUID
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (moduleId && !uuidRegex.test(moduleId)) {
+    errors.push('moduleId must be a valid UUID');
+  }
+
+  if (!answers || !Array.isArray(answers)) {
+    errors.push('answers is required and must be an array');
+  } else {
+    // Validate each answer
+    answers.forEach((answer, index) => {
+      if (!answer.questionId || !uuidRegex.test(answer.questionId)) {
+        errors.push(`answers[${index}].questionId is required and must be a valid UUID`);
+      }
+
+      if (answer.submittedAnswer === undefined || answer.submittedAnswer === null) {
+        errors.push(`answers[${index}].submittedAnswer is required`);
+      }
+
+      if (answer.timeSpentSeconds !== undefined) {
+        if (typeof answer.timeSpentSeconds !== 'number' || answer.timeSpentSeconds < 0) {
+          errors.push(`answers[${index}].timeSpentSeconds must be a positive number`);
+        }
+      }
+    });
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors
+    });
+  }
+
+  next();
+};
+
+// Validate submission ID parameter
+const validateSubmissionId = (req, res, next) => {
+  const { submissionId } = req.params;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  
+  if (submissionId && !uuidRegex.test(submissionId)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid submissionId format. Must be a valid UUID.'
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   validateQuestion,
   sanitizeInput,
   validateUUID,
   validateAltId,
-  validateTestCode
+  validateTestCode,
+  validateSubmissionCreate,
+  validateAnswers,
+  validateSubmissionId
 };

@@ -139,9 +139,9 @@ This will:
 ```
 Connecting to database...
 Applying migration: 001_create_initial_tables.sql
-✓ Applied 001_create_initial_tables.sql
+Applied 001_create_initial_tables.sql
 Applying migration: 002_add_order_columns.sql
-✓ Applied 002_add_order_columns.sql
+Applied 002_add_order_columns.sql
 All migrations completed successfully!
 ```
 
