@@ -333,7 +333,7 @@ submission_modules (1) ←→ (M) submitted_answers ←→ (1) questions
 |--------|---------|-------------|
 | Upload Questions | `npm run upload:questions` | Upload questions to database |
 | Create Sample Test | `npm run create:sample` | Create full-length adaptive test |
-| Prepare Questions | `npm run prep:math` | Prepare math questions for upload |
+| Prepare Questions | `python scripts/prepare_questions.py` | Prepare questions for upload |
 
 ### Testing
 
