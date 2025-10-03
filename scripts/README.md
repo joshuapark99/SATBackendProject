@@ -659,3 +659,59 @@ TEST_USER_PASSWORD=yourpassword
 # Run tests
 npm run test:endpoints:auth
 ```
+
+**What gets tested:**
+
+The automated test script (`scripts/test_endpoints_with_auth.js`) runs through a complete test-taking flow:
+
+1. ✅ **Authentication** - Signs in with Supabase and gets JWT token
+2. ✅ **Get Test** - Retrieves test data by code
+3. ✅ **Create Submission** - Starts test with authenticated user ID
+4. ✅ **Submit Answers** - Submits 5 answers with upsert test
+5. ✅ **Complete Module** - Grades answers and tests adaptive logic
+6. ✅ **Verify Adaptive** - Confirms correct Module 2 assigned (easy vs hard)
+7. ✅ **Get Submission** - Retrieves full submission data
+8. ✅ **User History** - Gets user's submission history
+9. ✅ **Cleanup** - Removes test data automatically
+
+**Expected output:**
+```
+✓ Authentication successful
+✓ Test retrieved successfully
+✓ Submission created successfully
+✓ User ID correctly set from auth token
+✓ Submitted 5 answers
+✓ Module completed successfully
+✓ Adaptive logic correct: High score → Hard module
+✓ All tests passed! 🎉
+```
+
+**Prerequisites:**
+- Server running: `npm run dev`
+- Test exists: `npm run create:sample`
+- Test user created in Supabase Dashboard
+- Environment variables set in `.env`
+
+---
+
+## 📖 Additional Resources
+
+### Related Documentation
+
+- **[Main README](../README.md)** - Project overview and setup
+- **[Sample Test Creation](README_sample_test.md)** - Detailed test creation guide
+- **[Authentication Guide](../docs/AUTHENTICATION_IMPLEMENTATION.md)** - Auth implementation details
+
+### Key Files
+
+- **Scoring Logic**: `utils/satScoring.js`
+- **Submission Model**: `models/Submission.js`
+- **Test Model**: `models/Test.js`
+- **Auth Middleware**: `middleware/auth.js`
+- **Validation**: `middleware/validation.js`
+
+### Migrations
+
+- **003**: Submissions tables (submissions, submission_modules, submitted_answers)
+- **004**: Module difficulty column (adaptive testing)
+- **005**: User ID UUID with FK to auth.users (authentication)
