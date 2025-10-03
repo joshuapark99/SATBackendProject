@@ -579,6 +579,135 @@ npm run dev
 curl http://localhost:3000/health
 ```
 
+### 📤 Preparing and Uploading Questions with Flags
+
+#### Prepare Questions
+
+The `prepare_questions.py` script processes raw question data for database upload.
+
+**Basic Usage:**
+```bash
+# Prepare math questions (default)
+npm run prep:math
+
+# Or manually
+python scripts/prepare_questions.py
+```
+
+**With Flags:**
+```bash
+# Prepare reading/writing questions
+python scripts/prepare_questions.py --type rw
+
+# Use custom input/output files
+python scripts/prepare_questions.py --type math \
+  --input public/math_questions.jsonl \
+  --output public/math_questions_prepared.jsonl
+
+# Process only first 100 questions
+python scripts/prepare_questions.py --limit 100
+
+# Prepare RW questions with limit
+python scripts/prepare_questions.py --type rw --limit 50
+
+# Process specific question by ID
+python scripts/prepare_questions.py --id 3f5a3602
+
+# Process question at specific index (1-based)
+python scripts/prepare_questions.py --index 5
+```
+
+**Available Flags:**
+- `--type <type>`: Question type - `math` or `rw` (default: `math`)
+- `--input <file>`: Input JSONL file path (auto-detected based on type if not specified)
+- `--output <file>`: Output JSONL file path (auto-detected based on type if not specified)
+- `--limit <number>`: Maximum number of questions to process (default: all)
+- `--id <question_id>`: Process only the question with this ID
+- `--index <number>`: Process only the question at this 1-based index
+
+#### Upload Questions
+
+The `upload_questions.js` script uploads prepared questions to your database.
+
+**Basic Usage:**
+```bash
+# Upload all prepared math questions
+npm run upload:questions
+
+# Or manually
+node scripts/upload_questions.js
+```
+
+**With Flags:**
+```bash
+# Dry run - preview what would be uploaded (highly recommended first step!)
+node scripts/upload_questions.js --dry-run --limit 5
+
+# Upload reading/writing questions
+node scripts/upload_questions.js --type rw
+
+# Upload with custom limit
+node scripts/upload_questions.js --limit 10
+
+# Upload from custom file
+node scripts/upload_questions.js --input public/custom_questions_prepared.jsonl
+
+# Upload with custom test name
+node scripts/upload_questions.js --test-name "My SAT Practice Test"
+
+# Combine multiple flags
+node scripts/upload_questions.js --type rw --limit 50 --dry-run
+```
+
+**Available Flags:**
+- `--type <type>`: Question type - `math` or `rw` (default: `math`)
+- `--input <file>`: Input JSONL file path (auto-detected based on type if not specified)
+- `--limit <number>`: Maximum number of questions to upload (default: all)
+- `--test-name <name>`: Name for the test (default: "SAT Math Practice Test")
+- `--dry-run`: Preview mode - show what would be uploaded without actually uploading
+- `--help`: Display help message with all options
+
+#### Common Workflows
+
+**Complete Math Question Pipeline:**
+```bash
+# 1. Prepare math questions
+python scripts/prepare_questions.py --type math --limit 100
+
+# 2. Preview what will be uploaded
+node scripts/upload_questions.js --type math --dry-run --limit 5
+
+# 3. Upload questions
+node scripts/upload_questions.js --type math --limit 100
+```
+
+**Complete Reading/Writing Question Pipeline:**
+```bash
+# 1. Prepare RW questions
+python scripts/prepare_questions.py --type rw
+
+# 2. Preview upload
+node scripts/upload_questions.js --type rw --dry-run --limit 5
+
+# 3. Upload all RW questions
+node scripts/upload_questions.js --type rw
+```
+
+**Safe Upload Strategy (Recommended):**
+```bash
+# Always start with a small batch and dry-run
+node scripts/upload_questions.js --dry-run --limit 5
+
+# Then upload a small batch
+node scripts/upload_questions.js --limit 10
+
+# If successful, upload more
+node scripts/upload_questions.js --limit 100
+
+# Finally, upload all remaining
+node scripts/upload_questions.js
+```
+
 ## 📚 Additional Resources
 
 ### Project Documentation
