@@ -1,753 +1,480 @@
 ﻿# SAT Backend Project
 
-A comprehensive Node.js/Express backend application for managing SAT test questions, modules, and tests with Supabase database integration. This project provides a complete data processing pipeline for SAT question management and includes tools for database administration, data preparation, and testing.
+A comprehensive Node.js/Express backend for managing adaptive SAT practice tests with user authentication, submissions tracking, and automatic grading. Built with Supabase/PostgreSQL for reliable data storage and JWT authentication.
+
+## 🌟 Key Features
+
+- 🎯 **Adaptive Testing** - Dynamically assigns Module 2 difficulty based on Module 1 performance
+- 🔒 **JWT Authentication** - Secure user authentication via Supabase
+- 📊 **Auto Grading** - Automatic answer grading and SAT score calculation (400-1600)
+- 📝 **Submission Tracking** - Complete test-taking session management
+- 🎨 **RESTful API** - Clean API endpoints for test management
+- 🗄️ **Migration System** - Version-controlled database schema updates
+- ⚡ **Real-time Progress** - Track student progress through test modules
+- 🔐 **Secure** - Helmet, CORS, input validation, and foreign key constraints
+
+## 📋 Table of Contents
+
+- [Quick Start](#-quick-start)
+- [Project Structure](#-project-structure)
+- [Core Concepts](#-core-concepts)
+- [Setup Guide](#-complete-setup-guide)
+- [API Documentation](#-api-documentation)
+- [Database Schema](#-database-schema)
+- [Available Scripts](#-available-scripts)
+- [Testing](#-testing)
+- [Troubleshooting](#-troubleshooting)
+
+## 🚀 Quick Start
+
+```bash
+# 1. Clone and install
+git clone <your-repository-url>
+cd SATBackendProject
+npm install
+
+# 2. Configure environment (.env file)
+SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+PORT=3000
+NODE_ENV=development
+
+# 3. Setup database
+npm run migrate
+
+# 4. Upload questions (optional)
+npm run upload:questions
+
+# 5. Create sample test
+npm run create:sample
+
+# 6. Start server
+npm run dev
+
+# 7. Test endpoints (requires test user in Supabase)
+npm run test:endpoints:auth
+```
 
 ## 🏗️ Project Structure
 
 ```
 SATBackendProject/
 ├── config/
-│   └── db.js                 # Database connection configuration
+│   └── db.js                          # Database connection pooling
 ├── controllers/
-│   ├── questionController.js # Question management logic
-│   └── testController.js     # Test management logic
+│   ├── questionController.js          # Question management
+│   ├── testController.js              # Test management
+│   └── submissionController.js        # Submission & grading (NEW)
 ├── middleware/
-│   ├── auth.js              # Authentication middleware
-│   ├── index.js             # Middleware exports
-│   └── validation.js        # Request validation middleware
+│   ├── auth.js                        # JWT authentication
+│   ├── validation.js                  # Request validation
+│   └── index.js                       # Middleware exports
 ├── migrations/
-│   ├── 001_create_initial_tables.sql    # Core database schema
-│   └── 002_add_order_columns.sql        # Ordering support for tests/modules
+│   ├── 001_create_initial_tables.sql  # Core schema
+│   ├── 002_add_order_columns.sql      # Ordering support
+│   ├── 003_create_submissions_tables.sql    # Submissions system
+│   ├── 004_add_module_difficulty.sql  # Adaptive testing
+│   └── 005_update_user_id_to_uuid.sql # Auth integration
 ├── models/
-│   ├── Question.js          # Question data model
-│   └── Test.js              # Test data model
-├── public/
-│   ├── math_questions.jsonl             # Raw SAT math questions
-│   ├── math_questions_prepared.jsonl    # Processed questions for upload
-│   ├── rw_questions.jsonl               # Raw Reading/Writing questions
-│   └── rw_questions_prepared.jsonl      # Processed RW questions for upload
+│   ├── Question.js                    # Question model
+│   ├── Test.js                        # Test model
+│   └── Submission.js                  # Submission model (NEW)
 ├── routes/
-│   ├── index.js             # Main router
+│   ├── index.js                       # Main router
 │   └── v1/
-│       └── testing/         # API version 1 testing routes
+│       ├── index.js                   # V1 router
+│       └── testing/
+│           ├── questionRoutes.js      # Question endpoints
+│           ├── testRoutes.js          # Test endpoints
+│           └── submissionRoutes.js    # Submission endpoints (NEW)
+├── utils/
+│   └── satScoring.js                  # SAT scoring algorithms (NEW)
+├── docs/
+│   └── AUTHENTICATION_IMPLEMENTATION.md    # Auth technical docs
 ├── scripts/
-│   ├── migrate.js           # Database migration runner
-│   ├── prepare_questions.py # Question data preparation
-│   ├── upload_questions.js  # Question upload to database
-│   ├── test_db.js          # Database testing utility
-│   ├── create_sample_test.js # Sample test creation
-│   └── README.md           # Scripts documentation
-├── services/               # Business logic services
-├── dataViewer.py          # Python utility for data inspection
-├── server.js              # Main Express server
-├── package.json           # Node.js dependencies and scripts
-└── README.md              # This file
+│   ├── migrate.js                     # Migration runner
+│   ├── upload_questions.js            # Question uploader
+│   ├── create_sample_test.js          # Sample test generator
+│   ├── test_endpoints_with_auth.js    # API testing
+│   └── README.md                      # Complete API documentation
+├── server.js                          # Express server entry point
+└── package.json                       # Dependencies & scripts
 ```
 
-## 🚀 Features
+## 💡 Core Concepts
 
-- **Express.js Server** with security middleware (Helmet, CORS, Morgan)
-- **Supabase Database Integration** with PostgreSQL connection pooling
-- **Database Migrations** system for schema management
-- **Question Management** with support for SAT Math and Reading/Writing questions
-- **Test & Module Organization** with flexible ordering and relationships
-- **Data Processing Pipeline** for preparing and uploading question data
-- **Health Check Endpoint** for monitoring server and database status
-- **RESTful API** with proper error handling and validation
-- **Sample Data Creation** tools for testing and development
+### Adaptive Testing
 
-## 📊 Database Schema
+The system mimics the real digital SAT:
 
-The application uses a relational database schema with the following core entities:
+1. **Module 1 (Baseline)** - All students take the same medium-difficulty module
+2. **Scoring** - System grades Module 1 and calculates percentage
+3. **Adaptive Assignment** - Based on performance:
+   - Score ≥60% → Module 2 (Harder)
+   - Score <60% → Module 2 (Easier)
+4. **Final Scoring** - Both modules combined for section score (200-800)
 
-- **Tests**: Container for test sessions with unique codes
-- **Modules**: Subject-specific test sections with time limits
-- **Questions**: Individual SAT questions with metadata and content
-- **Junction Tables**: Many-to-many relationships between tests/modules and modules/questions
+### Test Structure
+
+- **Test** - Container with unique code (e.g., "SATFL1")
+- **Modules** - 6 modules total per test:
+  - Reading & Writing Module 1 (27 questions, medium)
+  - Reading & Writing Module 2 Easy (27 questions)
+  - Reading & Writing Module 2 Hard (27 questions)
+  - Math Module 1 (22 questions, medium)
+  - Math Module 2 Easy (22 questions)
+  - Math Module 2 Hard (22 questions)
+- **Student Completes** - Only 4 modules (98 questions total)
+
+### Authentication Flow
+
+1. User authenticates via Supabase (frontend)
+2. Receives JWT access token
+3. Includes token in `Authorization: Bearer <token>` header
+4. Backend verifies token and extracts user ID
+5. User ID stored with submissions (FK to auth.users)
 
 ## 🛠️ Complete Setup Guide
 
 ### Prerequisites
 
-Before starting, ensure you have the following installed:
+- **Node.js** v16+ - [Download](https://nodejs.org/)
+- **Python 3.7+** - [Download](https://python.org/)
+- **Supabase Account** - [Sign up](https://supabase.com/)
+- **Git** - [Download](https://git-scm.com/)
 
-- **Node.js** (v16 or higher) - [Download here](https://nodejs.org/)
-- **Python 3.7+** - [Download here](https://python.org/)
-- **Git** - [Download here](https://git-scm.com/)
-- **Supabase Account** - [Sign up here](https://supabase.com/)
+### Step 1: Install Dependencies
 
-### Step 1: Clone and Navigate to Project
-
-```bash
-git clone <your-repository-url>
-cd SATBackendProject
-```
-
-### Step 2: Install Dependencies
-
-**Install Node.js dependencies:**
 ```bash
 npm install
+pip install pandas  # For question preparation scripts
 ```
 
-**Install Python dependencies:**
-```bash
-pip install pandas
-```
+### Step 2: Environment Configuration
 
-### Step 3: Set Up Environment Variables
-
-Create a `.env` file in the project root:
-
-```bash
-# Create the .env file
-touch .env  # On Windows: echo. > .env
-```
-
-Add the following content to your `.env` file:
+Create `.env` file in project root:
 
 ```env
-# Database Configuration
-SUPABASE_DB_URL=postgresql://postgres:[YOUR-PASSWORD]@[YOUR-HOST]:5432/postgres
+# Database Connection
+SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+
+# Supabase Auth (for JWT verification)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 
 # Server Configuration
 PORT=3000
 NODE_ENV=development
+
+# Testing (optional)
+TEST_USER_EMAIL=test@example.com
+TEST_USER_PASSWORD=testpassword123
 ```
 
-**How to get your Supabase connection string:**
-1. Go to your Supabase dashboard
-2. Navigate to Connect at the top of the page
-3. Copy the URL under "Session Pooler"
-4. Replace `[YOUR-PASSWORD]` with your database password
+**How to get your credentials:**
+- **SUPABASE_DB_URL**: Supabase Dashboard → Project Settings → Database → Connection String (Session Pooler)
+- **SUPABASE_URL**: Project Settings → API → Project URL
+- **SUPABASE_ANON_KEY**: Project Settings → API → anon/public key
 
-### Step 4: Run Database Migrations
-
-Set up your database schema:
+### Step 3: Database Setup
 
 ```bash
+# Run all migrations
 npm run migrate
 ```
 
-This will:
-- Create the `schema_migrations` table to track applied migrations
-- Apply `001_create_initial_tables.sql` (creates core tables)
-- Apply `002_add_order_columns.sql` (adds ordering support)
-- Apply etc.
+This creates:
+- Core tables (tests, modules, questions)
+- Submissions system tables
+- Module difficulty column for adaptive testing
+- User authentication integration
 
-**Expected output:**
-```
-Connecting to database...
-Applying migration: 001_create_initial_tables.sql
-✓ Applied 001_create_initial_tables.sql
-Applying migration: 002_add_order_columns.sql
-✓ Applied 002_add_order_columns.sql
-All migrations completed successfully!
-```
+### Step 4: Create Test User (For Testing)
 
-### Step 5: Test Database Connection
+1. Go to Supabase Dashboard → Authentication → Users
+2. Click "Add User"
+3. Create user with:
+   - Email: `test@example.com`
+   - Password: `testpassword123`
+   - Confirm Email: Yes
 
-Verify your database setup:
+### Step 5: Upload Questions (Optional)
 
 ```bash
-node scripts/test_db.js
-```
-
-**Expected output:**
-```
-Connecting to database...
-Database connection successful!
-Total questions in database: 0
-Database test completed successfully.
-```
-
-### Step 6: Prepare Question Data (Optional)
-
-If you have raw question data, prepare it for upload:
-
-```bash
-# For math questions
-npm run prep:math
-
-# Or manually with custom parameters
-python scripts/prepare_questions.py --input public/math_questions.jsonl --output public/math_questions_prepared.jsonl --limit 100
-```
-
-### Step 7: Upload Questions to Database (Optional)
-
-Upload prepared questions to your database:
-
-```bash
-# Dry run first to see what would be uploaded
+# Dry run first
 node scripts/upload_questions.js --dry-run --limit 5
 
-# Upload questions (start with a small batch)
-node scripts/upload_questions.js --limit 10
-
-# Upload all questions
+# Upload questions
 npm run upload:questions
 ```
 
-### Step 8: Create Sample Test Data (Optional)
-
-Create sample test data for development:
+### Step 6: Create Sample Test
 
 ```bash
-node scripts/create_sample_test.js
+npm run create:sample
 ```
 
-### Step 9: Start the Development Server
+Creates test "SATFL1" with 6 modules and adaptive testing setup.
+
+### Step 7: Start Server
 
 ```bash
+# Development mode (auto-restart)
 npm run dev
+
+# Production mode
+npm start
 ```
 
-**Expected output:**
-```
-Server running on port 3000
-Database connected successfully
-```
-
-### Step 10: Verify Installation
-
-Test the health endpoint:
+### Step 8: Test Everything
 
 ```bash
-curl http://localhost:3000/health
+# Test API endpoints with authentication
+npm run test:endpoints:auth
 ```
 
-**Expected response:**
-```json
-{
-  "status": "ok",
-  "db": "connected",
-  "uptime": 123.456
-}
+## 📚 API Documentation
+
+Full API documentation is available in **[scripts/README.md](scripts/README.md)** including:
+
+- Complete API endpoint reference
+- Authentication requirements
+- Request/response examples
+- Test-taking flow
+- Error handling
+- cURL examples
+
+### Quick Reference
+
+#### Public Endpoints (No Auth)
+
+```bash
+GET  /health                                    # Server health
+GET  /api/v1/testing/tests                      # List tests
+GET  /api/v1/testing/tests/:code                # Get test by code
+GET  /api/v1/testing/question                   # List questions
+```
+
+#### Authenticated Endpoints (Require JWT)
+
+```bash
+POST /api/v1/submissions                        # Start test
+GET  /api/v1/submissions/:id                    # Get submission
+GET  /api/v1/submissions/user/:userId           # User's submissions
+POST /api/v1/submissions/:id/answers            # Submit answers
+POST /api/v1/submissions/:id/modules/:moduleId/complete    # Complete module
+POST /api/v1/submissions/:id/finalize           # Finalize test
+GET  /api/v1/submissions/:id/current-module     # Get current module
+```
+
+### Authentication Example
+
+```javascript
+// Get token from Supabase
+const { data: { session } } = await supabase.auth.signInWithPassword({
+  email: 'user@example.com',
+  password: 'password'
+});
+
+// Use in requests
+fetch('/api/v1/submissions', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    testId: 'test-uuid',
+    initialModuleId: 'module-uuid'
+  })
+});
+```
+
+## 🗄️ Database Schema
+
+### Core Tables
+
+- **tests** - Test containers with unique codes
+- **modules** - Test modules with difficulty levels and time limits
+- **questions** - SAT questions with answers and metadata
+- **test_modules** - Links tests to modules with ordering
+- **module_questions** - Links modules to questions with ordering
+
+### Submission Tables
+
+- **submissions** - Test submission records with user FK
+- **submission_modules** - Tracks assigned modules per submission
+- **submitted_answers** - Student answers with correctness tracking
+
+### Key Relationships
+
+```
+tests (1) ←→ (M) test_modules ←→ (M) modules
+modules (1) ←→ (M) module_questions ←→ (M) questions
+tests (1) ←→ (M) submissions ←→ (1) auth.users
+submissions (1) ←→ (M) submission_modules ←→ (1) modules
+submission_modules (1) ←→ (M) submitted_answers ←→ (1) questions
 ```
 
 ## 📝 Available Scripts
 
-### Development Scripts
+### Development
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| Start Production Server | `npm start` | Start the production server using `node server.js` |
-| Start Development Server | `npm run dev` | Start development server with nodemon for auto-restart |
-| Run Migrations | `npm run migrate` | Execute all pending database migrations |
+| Start Dev Server | `npm run dev` | Start with auto-restart (nodemon) |
+| Start Production | `npm start` | Start production server |
+| Run Migrations | `npm run migrate` | Apply database migrations |
 
-### Data Management Scripts
-
-| Script | Command | Description |
-|--------|---------|-------------|
-| Prepare Math Questions | `npm run prep:math` | Process raw math questions for database upload |
-| Upload Questions | `npm run upload:questions` | Upload prepared questions to the database |
-| Create Sample Test | `npm run create:sample` | Generate sample test data for development |
-
-### Manual Script Execution
+### Data Management
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| Test Database | `node scripts/test_db.js` | Test database connection and display all questions |
-| Prepare Questions | `python scripts/prepare_questions.py [options]` | Process raw question data with custom parameters |
-| Upload Questions | `node scripts/upload_questions.js [options]` | Upload questions with advanced options |
-| Run Migrations | `node scripts/migrate.js` | Manually run database migrations |
-| Data Viewer | `python dataViewer.py` | Inspect and analyze question data structure |
-| Create Sample Test | `node scripts/create_sample_test.js` | Generate sample test data manually |
+| Upload Questions | `npm run upload:questions` | Upload questions to database |
+| Create Sample Test | `npm run create:sample` | Create full-length adaptive test |
+| Prepare Questions | `npm run prep:math` | Prepare math questions for upload |
 
-## 🔧 Detailed Script Usage
+### Testing
 
-### prepare_questions.py
+| Script | Command | Description |
+|--------|---------|-------------|
+| Test Endpoints | `npm run test:endpoints:auth` | Test all API endpoints with auth |
+| Test Database | `node scripts/test_db.js` | Verify database connection |
 
-Processes raw question data for database upload:
+## 🧪 Testing
 
-```bash
-# Basic usage
-python scripts/prepare_questions.py
-
-# With custom input/output files
-python scripts/prepare_questions.py --input public/math_questions.jsonl --output public/math_questions_prepared.jsonl
-
-# Limit number of questions processed
-python scripts/prepare_questions.py --limit 100
-
-# Using npm script
-npm run prep:math
-```
-
-**Options:**
-- `--input`: Input JSONL file path (default: `public/math_questions.jsonl`)
-- `--output`: Output JSONL file path (default: `public/math_questions_prepared.jsonl`)
-- `--limit`: Maximum number of questions to process (default: all)
-
-### upload_questions.js
-
-Uploads prepared questions to the database:
+### Automated Testing
 
 ```bash
-# Dry run to preview what would be uploaded
-node scripts/upload_questions.js --dry-run --limit 5
-
-# Upload with custom test name
-node scripts/upload_questions.js --test-name "My SAT Practice Test" --limit 10
-
-# Upload all questions
-node scripts/upload_questions.js
-
-# Upload specific question type
-node scripts/upload_questions.js --type math --limit 50
-
-# Using npm script
-npm run upload:questions
+# Run full test suite (requires test user)
+npm run test:endpoints:auth
 ```
 
-**Options:**
-- `--type`: Question type - `math` or `rw` (default: `math`)
-- `--input`: Input file path (default: auto-detected based on type)
-- `--limit`: Maximum number of questions to upload (default: all)
-- `--test-name`: Name for the test (default: "SAT Math Practice Test")
-- `--dry-run`: Preview mode without actually uploading
+Tests:
+- ✅ Test retrieval
+- ✅ Submission creation (authenticated)
+- ✅ Answer submission with upsert
+- ✅ Module completion with grading
+- ✅ Adaptive module assignment
+- ✅ Current module tracking
+- ✅ User submission history
 
-### migrate.js
-
-Manages database schema migrations:
+### Manual Testing
 
 ```bash
-# Run all pending migrations
-node scripts/migrate.js
+# 1. Get auth token
+curl -X POST 'https://your-project.supabase.co/auth/v1/token?grant_type=password' \
+  -H "apikey: YOUR_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"yourpassword"}'
 
-# Using npm script
-npm run migrate
+# 2. Use token in API calls
+curl -X POST 'http://localhost:3000/api/v1/submissions' \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"testId":"test-uuid","initialModuleId":"module-uuid"}'
 ```
-
-**What it does:**
-- Creates `schema_migrations` table if it doesn't exist
-- Applies all unapplied migration files in order
-- Tracks applied migrations to prevent duplicates
-- Uses transactions for safe rollback on errors
-
-### test_db.js
-
-Tests database connection and displays data:
-
-```bash
-# Test database connection and show all questions
-node scripts/test_db.js
-```
-
-**Output includes:**
-- Database connection status
-- Total number of questions
-- Sample question data (if any exist)
-- Database schema verification
-
-### create_sample_test.js
-
-Creates sample test data for development:
-
-```bash
-# Create sample test with modules and questions
-node scripts/create_sample_test.js
-
-# Using npm script
-npm run create:sample
-```
-
-**Creates:**
-- Sample test with unique code
-- Math and Reading/Writing modules
-- Sample questions for each module
-- Proper relationships between entities
-
-## 🔧 API Endpoints
-
-### Health Check
-- `GET /health` - Server and database status
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "db": "connected", 
-  "uptime": 123.456
-}
-```
-
-### API Routes (v1)
-- `GET /api/v1/testing/questions` - List questions
-- `GET /api/v1/testing/questions/:id` - Get specific question
-- `GET /api/v1/testing/tests` - List tests
-- `GET /api/v1/testing/tests/:id` - Get specific test
-
-## 📁 Data Processing Pipeline
-
-### Complete Workflow
-
-1. **Raw Data**: Questions stored in JSONL format in `public/` directory
-2. **Preparation**: Python script processes and normalizes question data
-3. **Upload**: Node.js script uploads prepared questions to Supabase
-4. **Verification**: Test script validates database contents
-5. **Sample Data**: Create test data for development and testing
-
-### Question Data Format
-
-Questions are processed with the following structure:
-- `id`: 8-character alphanumeric identifier
-- `attributes`: [test_type, subject, domain, skill]
-- `difficulty`: easy/medium/hard
-- `prompt`: Question content (HTML)
-- `choices_raw`: Answer choices (HTML)
-- `rationale`: Explanation text
-- `correct_answer`: Correct answer value
-- `is_multiple_choice`: Boolean flag
-
-### Supported Question Types
-
-- **Math Questions**: SAT Math section questions with multiple choice answers
-- **Reading/Writing Questions**: SAT Evidence-Based Reading and Writing questions
-
-## 🗄️ Database Migrations
-
-The project includes a custom migration system:
-
-- **Migration Files**: SQL files in `migrations/` directory
-- **Migration Runner**: `scripts/migrate.js` handles execution
-- **Version Tracking**: `schema_migrations` table tracks applied migrations
-- **Rollback Support**: Manual rollback capability (transaction-based)
-
-### Migration Files
-
-| File | Description |
-|------|-------------|
-| `001_create_initial_tables.sql` | Creates core tables (tests, modules, questions, junction tables) |
-| `002_add_order_columns.sql` | Adds ordering support to junction tables |
-
-## 🔒 Security Features
-
-- **Helmet.js**: Security headers and protection
-- **CORS**: Cross-origin resource sharing configuration
-- **Input Validation**: Request validation middleware
-- **Environment Variables**: Secure configuration management
-- **SSL Connection**: Database connections use SSL encryption
-
-## 🧪 Testing & Development
-
-- **Health Check**: Monitor server and database connectivity
-- **Database Testing**: Scripts to verify data integrity
-- **Dry Run Mode**: Test data uploads without committing changes
-- **Development Mode**: Enhanced error messages and logging
-- **Sample Data**: Easy creation of test data for development
-
-## 📈 Monitoring
-
-The application includes basic monitoring capabilities:
-- Server uptime tracking
-- Database connection status
-- Request logging with Morgan
-- Error handling with detailed messages in development
-- Health check endpoint for external monitoring
 
 ## 🚨 Troubleshooting
 
-### Common Issues and Solutions
+### Database Connection Issues
 
-#### Database Connection Issues
-
-**Problem**: `Connection terminated unexpectedly`
-```bash
+```
 Error: Connection terminated unexpectedly
 ```
 
-**Solution**:
-1. Verify your `SUPABASE_DB_URL` in `.env` file
-2. Check if your Supabase database is running
-3. Ensure your IP is whitelisted in Supabase settings
-4. Test connection: `node scripts/test_db.js`
+**Solutions:**
+1. Verify `SUPABASE_DB_URL` in `.env`
+2. Check Supabase dashboard for database status
+3. Ensure IP is whitelisted in Supabase settings
+4. Test: `node scripts/test_db.js`
 
-#### Migration Failures
+### Authentication Errors
 
-**Problem**: Migration fails with "already exists" error
-```bash
-Error: relation "tests" already exists
+```
+Error: No authorization token provided
 ```
 
-**Solution**:
-1. Check if migrations were partially applied
-2. Connect to database and verify `schema_migrations` table
-3. Manually clean up if needed, then re-run migrations
+**Solutions:**
+1. Ensure token in `Authorization: Bearer <token>` header
+2. Create test user in Supabase Dashboard
+3. Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env`
+4. Check token hasn't expired (default: 1 hour)
 
-#### Python Script Issues
+### Migration Failures
 
-**Problem**: `ModuleNotFoundError: No module named 'pandas'`
-```bash
-ModuleNotFoundError: No module named 'pandas'
+```
+Error: relation already exists
 ```
 
-**Solution**:
-```bash
-pip install pandas
-# Or if using virtual environment:
-pip install -r requirements.txt
+**Solutions:**
+1. Check `schema_migrations` table in database
+2. Manually remove partially applied migrations if needed
+3. Re-run: `npm run migrate`
+
+### Test Script Fails
+
+```
+Error: Test with access code 'SATFL1' not found
 ```
 
-#### Port Already in Use
+**Solutions:**
+1. Create sample test: `npm run create:sample`
+2. Upload questions first: `npm run upload:questions`
+3. Run migrations: `npm run migrate`
 
-**Problem**: `Error: listen EADDRINUSE: address already in use :::3000`
-```bash
-Error: listen EADDRINUSE: address already in use :::3000
+### Port Already in Use
+
+```
+Error: EADDRINUSE :::3000
 ```
 
-**Solution**:
-1. Find and kill the process using port 3000:
-   ```bash
-   # Windows
-   netstat -ano | findstr :3000
-   taskkill /PID <PID_NUMBER> /F
-   
-   # macOS/Linux
-   lsof -ti:3000 | xargs kill -9
-   ```
-2. Or change the port in your `.env` file:
-   ```env
-   PORT=3001
-   ```
-
-#### Upload Script Issues
-
-**Problem**: Questions not uploading or errors during upload
-
-**Solution**:
-1. Run dry-run first: `node scripts/upload_questions.js --dry-run --limit 5`
-2. Check if prepared questions file exists
-3. Verify database schema is up to date: `npm run migrate`
-4. Check database connection: `node scripts/test_db.js`
-
-### Getting Help
-
-1. **Check the logs**: Look at console output for detailed error messages
-2. **Verify setup**: Run through the setup steps again
-3. **Test components**: Use individual scripts to isolate issues
-4. **Database status**: Check Supabase dashboard for database issues
-
-## 🚧 Development Status
-
-**Completed:**
-- ✅ Express server setup with middleware
-- ✅ Supabase database integration
-- ✅ Database schema and migrations
-- ✅ Question data processing pipeline
-- ✅ Basic health monitoring
-- ✅ RESTful API endpoints
-- ✅ Sample data creation tools
-
-**In Progress:**
-- 🔄 Authentication middleware implementation
-- 🔄 Enhanced input validation system
-- 🔄 Performance optimization
-
-**Planned:**
-- 📋 User management system
-- 📋 Test administration interface
-- 📋 Question search and filtering
-- 📋 Advanced analytics and reporting
-
-## 🚀 Quick Start Summary
-
-For experienced developers who want to get up and running quickly:
-
+**Solutions:**
 ```bash
-# 1. Clone and setup
-git clone <your-repository-url>
-cd SATBackendProject
+# Windows
+netstat -ano | findstr :3000
+taskkill /PID <PID> /F
 
-# 2. Install dependencies
-npm install
-pip install pandas
+# Mac/Linux
+lsof -ti:3000 | xargs kill -9
 
-# 3. Configure environment
-echo "SUPABASE_DB_URL=your_connection_string_here" > .env
-echo "PORT=3000" >> .env
-echo "NODE_ENV=development" >> .env
-
-# 4. Setup database
-npm run migrate
-
-# 5. Test everything
-node scripts/test_db.js
-npm run dev
-
-# 6. Verify
-curl http://localhost:3000/health
+# Or change port in .env
+PORT=3001
 ```
 
-### 📤 Preparing and Uploading Questions with Flags
+## 📖 Additional Documentation
 
-#### Prepare Questions
+- **[API Documentation](scripts/README.md)** - Complete API reference with authentication
+- **[Authentication Guide](docs/AUTHENTICATION_IMPLEMENTATION.md)** - Technical auth implementation details
 
-The `prepare_questions.py` script processes raw question data for database upload.
+## 🔐 Security
 
-**Basic Usage:**
-```bash
-
-
-# Or manually
-python scripts/prepare_questions.py
-```
-
-**With Flags:**
-```bash
-# Prepare reading/writing questions
-python scripts/prepare_questions.py --type rw
-
-# Use custom input/output files
-python scripts/prepare_questions.py --type math \
-  --input public/math_questions.jsonl \
-  --output public/math_questions_prepared.jsonl
-
-# Process only first 100 questions
-python scripts/prepare_questions.py --limit 100
-
-# Prepare RW questions with limit
-python scripts/prepare_questions.py --type rw --limit 50
-
-# Process specific question by ID
-python scripts/prepare_questions.py --id 3f5a3602
-
-# Process question at specific index (1-based)
-python scripts/prepare_questions.py --index 5
-```
-
-**Available Flags:**
-- `--type <type>`: Question type - `math` or `rw` (default: `math`)
-- `--input <file>`: Input JSONL file path (auto-detected based on type if not specified)
-- `--output <file>`: Output JSONL file path (auto-detected based on type if not specified)
-- `--limit <number>`: Maximum number of questions to process (default: all)
-- `--id <question_id>`: Process only the question with this ID
-- `--index <number>`: Process only the question at this 1-based index
-
-#### Upload Questions
-
-The `upload_questions.js` script uploads prepared questions to your database.
-
-**Basic Usage:**
-```bash
-# Upload all prepared math questions
-npm run upload:questions
-
-# Or manually
-node scripts/upload_questions.js
-```
-
-**With Flags:**
-```bash
-# Dry run - preview what would be uploaded (highly recommended first step!)
-node scripts/upload_questions.js --dry-run --limit 5
-
-# Upload reading/writing questions
-node scripts/upload_questions.js --type rw
-
-# Upload with custom limit
-node scripts/upload_questions.js --limit 10
-
-# Upload from custom file
-node scripts/upload_questions.js --input public/custom_questions_prepared.jsonl
-
-# Upload with custom test name
-node scripts/upload_questions.js --test-name "My SAT Practice Test"
-
-# Combine multiple flags
-node scripts/upload_questions.js --type rw --limit 50 --dry-run
-```
-
-**Available Flags:**
-- `--type <type>`: Question type - `math` or `rw` (default: `math`)
-- `--input <file>`: Input JSONL file path (auto-detected based on type if not specified)
-- `--limit <number>`: Maximum number of questions to upload (default: all)
-- `--test-name <name>`: Name for the test (default: "SAT Math Practice Test")
-- `--dry-run`: Preview mode - show what would be uploaded without actually uploading
-- `--help`: Display help message with all options
-
-#### Common Workflows
-
-**Complete Math Question Pipeline:**
-```bash
-# 1. Prepare math questions
-python scripts/prepare_questions.py --type math --limit 100
-
-# 2. Preview what will be uploaded
-node scripts/upload_questions.js --type math --dry-run --limit 5
-
-# 3. Upload questions
-node scripts/upload_questions.js --type math --limit 100
-```
-
-**Complete Reading/Writing Question Pipeline:**
-```bash
-# 1. Prepare RW questions
-python scripts/prepare_questions.py --type rw
-
-# 2. Preview upload
-node scripts/upload_questions.js --type rw --dry-run --limit 5
-
-# 3. Upload all RW questions
-node scripts/upload_questions.js --type rw
-```
-
-**Safe Upload Strategy (Recommended):**
-```bash
-# Always start with a small batch and dry-run
-node scripts/upload_questions.js --dry-run --limit 5
-
-# Then upload a small batch
-node scripts/upload_questions.js --limit 10
-
-# If successful, upload more
-node scripts/upload_questions.js --limit 100
-
-# Finally, upload all remaining
-node scripts/upload_questions.js
-```
-
-## 📚 Additional Resources
-
-### Project Documentation
-- [Scripts Documentation](scripts/README.md) - Detailed script usage
-- [Sample Test Documentation](scripts/README_sample_test.md) - Sample test creation guide
-
-### External Resources
-- [Express.js Documentation](https://expressjs.com/)
-- [Supabase Documentation](https://supabase.com/docs)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Node.js Documentation](https://nodejs.org/docs/)
-
-### Development Tools
-- [Postman](https://www.postman.com/) - API testing
-- [pgAdmin](https://www.pgadmin.org/) - Database management
-- [VS Code](https://code.visualstudio.com/) - Recommended editor
+- ✅ **JWT Token Verification** - Cryptographic verification via Supabase JWKS
+- ✅ **Foreign Key Constraints** - User IDs verified against auth.users
+- ✅ **Input Validation** - Request validation middleware
+- ✅ **Helmet.js** - Security headers
+- ✅ **CORS** - Cross-origin configuration
+- ✅ **SSL/TLS** - Encrypted database connections
+- ✅ **No User Impersonation** - User ID from verified token only
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/your-feature-name`
-3. **Make your changes** following the existing code style
-4. **Test your changes**:
-   ```bash
-   npm run migrate
-   node scripts/test_db.js
-   npm run dev
-   ```
-5. **Commit your changes**: `git commit -m "Add your feature"`
-6. **Push to your branch**: `git push origin feature/your-feature-name`
-7. **Submit a pull request**
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/your-feature`
+3. Make changes following existing patterns
+4. Test thoroughly: `npm run test:endpoints:auth`
+5. Commit: `git commit -m "Add your feature"`
+6. Push: `git push origin feature/your-feature`
+7. Submit pull request
 
 ### Development Guidelines
 
-- Follow existing code style and patterns
-- Add tests for new functionality
-- Update documentation for new features
-- Ensure all scripts work with the existing setup
-- Test with both math and reading/writing questions
+- Follow existing code style
+- Add tests for new features
+- Update documentation
+- Run linter before committing
+- Test with both Math and Reading/Writing questions
 
 ## 📄 License
 
@@ -755,4 +482,4 @@ ISC License - see package.json for details
 
 ---
 
-**Need help?** Check the troubleshooting section above or create an issue in the repository.
+**Need Help?** Check the [Troubleshooting](#-troubleshooting) section or the [API Documentation](scripts/README.md).

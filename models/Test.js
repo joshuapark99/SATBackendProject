@@ -20,6 +20,7 @@ class Test {
       m.name as module_name,
       m.time_limit,
       m.subject_name,
+      m.difficulty as module_difficulty,
       tm.order_number as module_order,
       q.id as question_id,
       q.alt_id,
@@ -80,6 +81,7 @@ class Test {
             name: row.module_name,
             time_limit: row.time_limit,
             subject_name: row.subject_name,
+            difficulty: row.module_difficulty,
             order: row.module_order,
             questions: []
           });
@@ -138,6 +140,21 @@ class Test {
       return new Test(result.rows[0]);
     } catch (error) {
       throw new Error(`Error fetching test by code: ${error.message}`);
+    }
+  }
+
+  // Get basic test info by ID (without modules/questions)
+  static async findById(id) {
+    const query = 'SELECT * FROM tests WHERE id = $1';
+    
+    try {
+      const result = await pool.query(query, [id]);
+      if (result.rows.length === 0) {
+        return null;
+      }
+      return new Test(result.rows[0]);
+    } catch (error) {
+      throw new Error(`Error fetching test by ID: ${error.message}`);
     }
   }
 

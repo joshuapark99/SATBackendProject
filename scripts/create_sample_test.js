@@ -1,11 +1,15 @@
 const pool = require('../config/db');
 
 /**
- * Script to create a sample test file with:
- * - Test name: "sample test 1"
- * - Test code: "1A2B3C"
- * - 4 modules: 2 RW (order 1,2) and 2 Math (order 3,4)
- * - 2 random questions from each subject for each module
+ * Script to create a full-length adaptive SAT test with:
+ * - Test name: "SAT Practice Test - Full Length"
+ * - Test code: "SATFL1"
+ * - 6 modules total for adaptive testing:
+ *   * Reading & Writing: Module 1 (baseline), Module 2 Easy, Module 2 Hard
+ *   * Math: Module 1 (baseline), Module 2 Easy, Module 2 Hard
+ * - RW modules: 27 questions each, 32 minutes per module (matches actual SAT)
+ * - Math modules: 22 questions each, 35 minutes per module (matches actual SAT)
+ * - Students complete 4 modules total: 98 questions (54 RW + 44 Math)
  */
 
 async function createSampleTest() {
@@ -14,135 +18,167 @@ async function createSampleTest() {
   try {
     await client.query('BEGIN');
     
-    console.log('Creating sample test...');
+    console.log('Creating full-length adaptive SAT test...\n');
     
     // 1. Create the test
     const testResult = await client.query(`
       INSERT INTO tests (name, code)
       VALUES ($1, $2)
       RETURNING id
-    `, ['sample test 1', '1A2B3C']);
+    `, ['SAT Practice Test - Full Length', 'SATFL1']);
     
     const testId = testResult.rows[0].id;
     console.log(`Created test with ID: ${testId}`);
     
-    // 2. Create 4 modules
+    // 2. Create 6 modules (3 RW, 3 Math) for adaptive testing
+    // Module 1s are baseline (everyone takes these first)
+    // Module 2s are assigned based on Module 1 performance
+    // RW modules: 27 questions each (actual SAT)
+    // Math modules: 22 questions each (actual SAT)
     const modules = [
-      { name: 'Reading and Writing Module 1', subject: 'Reading and Writing', order: 1 },
-      { name: 'Reading and Writing Module 2', subject: 'Reading and Writing', order: 2 },
-      { name: 'Math Module 1', subject: 'Math', order: 3 },
-      { name: 'Math Module 2', subject: 'Math', order: 4 }
+      { name: 'Reading and Writing - Module 1', subject: 'Reading and Writing', order: 0, difficulty: 'medium', questionsPerModule: 27 },
+      { name: 'Reading and Writing - Module 2 (Easier)', subject: 'Reading and Writing', order: 1, difficulty: 'easy', questionsPerModule: 27 },
+      { name: 'Reading and Writing - Module 2 (Harder)', subject: 'Reading and Writing', order: 2, difficulty: 'hard', questionsPerModule: 27 },
+      { name: 'Math - Module 1', subject: 'Math', order: 3, difficulty: 'medium', questionsPerModule: 22 },
+      { name: 'Math - Module 2 (Easier)', subject: 'Math', order: 4, difficulty: 'easy', questionsPerModule: 22 },
+      { name: 'Math - Module 2 (Harder)', subject: 'Math', order: 5, difficulty: 'hard', questionsPerModule: 22 }
     ];
     
-    const moduleIds = [];
+    const moduleData = [];
     
+    console.log('\nCreating modules...');
     for (const module of modules) {
+      // Set time limit based on subject: RW = 32 min, Math = 35 min
+      const timeLimit = module.subject === 'Reading and Writing' ? 32 : 35;
+      
       const moduleResult = await client.query(`
-        INSERT INTO modules (name, time_limit, subject_name)
-        VALUES ($1, $2, $3)
+        INSERT INTO modules (name, time_limit, subject_name, difficulty)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
-      `, [module.name, 32, module.subject]); // 32 minutes per module
+      `, [module.name, timeLimit, module.subject, module.difficulty]);
       
       const moduleId = moduleResult.rows[0].id;
-      moduleIds.push({ id: moduleId, order: module.order });
-      console.log(`Created module: ${module.name} with ID: ${moduleId}`);
+      moduleData.push({ 
+        id: moduleId, 
+        order: module.order,
+        name: module.name,
+        subject: module.subject,
+        difficulty: module.difficulty,
+        questionsPerModule: module.questionsPerModule
+      });
+      console.log(`  ${module.name} (${module.difficulty})`);
     }
     
     // 3. Link modules to test
-    for (const moduleInfo of moduleIds) {
+    // Note: We link ALL modules to the test. The adaptive logic will determine
+    // which Module 2 variant to assign based on Module 1 performance.
+    console.log('\nLinking modules to test...');
+    for (const module of moduleData) {
       await client.query(`
         INSERT INTO test_modules (test_id, module_id, order_number)
         VALUES ($1, $2, $3)
-      `, [testId, moduleInfo.id, moduleInfo.order - 1]); // Convert to 0-based indexing
+      `, [testId, module.id, module.order]);
       
-      console.log(`Linked module ${moduleInfo.id} to test with order ${moduleInfo.order - 1}`);
+      console.log(`  Linked ${module.name} (order: ${module.order})`);
     }
     
-    // 4. Get random questions for each subject
-    console.log('\nSelecting random questions...');
+    // 4. Select questions for each module based on difficulty
+    console.log('\nSelecting questions by difficulty...');
     
-    // Get 4 random RW questions (2 for each RW module)
-    const rwQuestionsResult = await client.query(`
-      SELECT id FROM questions 
-      WHERE question_subject = 'Reading and Writing'
-      ORDER BY RANDOM()
-      LIMIT 4
-    `);
+    const questionsByModule = {};
     
-    const rwQuestionIds = rwQuestionsResult.rows.map(row => row.id);
-    console.log(`Selected ${rwQuestionIds.length} RW questions: ${rwQuestionIds.join(', ')}`);
-    
-    // Get 4 random Math questions (2 for each Math module)
-    const mathQuestionsResult = await client.query(`
-      SELECT id FROM questions 
-      WHERE question_subject = 'Math'
-      ORDER BY RANDOM()
-      LIMIT 4
-    `);
-    
-    const mathQuestionIds = mathQuestionsResult.rows.map(row => row.id);
-    console.log(`Selected ${mathQuestionIds.length} Math questions: ${mathQuestionIds.join(', ')}`);
+    for (const module of moduleData) {
+      // Select questions matching the module's difficulty and subject
+      const questionsResult = await client.query(`
+        SELECT id FROM questions 
+        WHERE question_subject = $1 
+          AND difficulty = $2
+        ORDER BY RANDOM()
+        LIMIT $3
+      `, [module.subject, module.difficulty, module.questionsPerModule]);
+      
+      questionsByModule[module.id] = questionsResult.rows.map(row => row.id);
+      
+      console.log(`  ${module.name}: ${questionsByModule[module.id].length} ${module.difficulty} questions`);
+      
+      // Warning if we don't have enough questions
+      if (questionsByModule[module.id].length < module.questionsPerModule) {
+        console.log(`Warning: Only ${questionsByModule[module.id].length} questions available (requested ${module.questionsPerModule})`);
+      }
+    }
     
     // 5. Link questions to modules
     console.log('\nLinking questions to modules...');
     
-    // RW Module 1 (order 1) - first 2 RW questions
-    const rwModule1Id = moduleIds.find(m => m.order === 1).id;
-    for (let i = 0; i < 2; i++) {
-      await client.query(`
-        INSERT INTO module_questions (module_id, question_id, order_number)
-        VALUES ($1, $2, $3)
-      `, [rwModule1Id, rwQuestionIds[i], i]);
+    for (const module of moduleData) {
+      const questions = questionsByModule[module.id];
+      
+      for (let i = 0; i < questions.length; i++) {
+        await client.query(`
+          INSERT INTO module_questions (module_id, question_id, order_number)
+          VALUES ($1, $2, $3)
+        `, [module.id, questions[i], i]);
+      }
+      
+      console.log(`  ${module.name}: ${questions.length} questions linked`);
     }
-    console.log(`Linked 2 questions to RW Module 1`);
-    
-    // RW Module 2 (order 2) - next 2 RW questions
-    const rwModule2Id = moduleIds.find(m => m.order === 2).id;
-    for (let i = 0; i < 2; i++) {
-      await client.query(`
-        INSERT INTO module_questions (module_id, question_id, order_number)
-        VALUES ($1, $2, $3)
-      `, [rwModule2Id, rwQuestionIds[i + 2], i]);
-    }
-    console.log(`Linked 2 questions to RW Module 2`);
-    
-    // Math Module 1 (order 3) - first 2 Math questions
-    const mathModule1Id = moduleIds.find(m => m.order === 3).id;
-    for (let i = 0; i < 2; i++) {
-      await client.query(`
-        INSERT INTO module_questions (module_id, question_id, order_number)
-        VALUES ($1, $2, $3)
-      `, [mathModule1Id, mathQuestionIds[i], i]);
-    }
-    console.log(`Linked 2 questions to Math Module 1`);
-    
-    // Math Module 2 (order 4) - next 2 Math questions
-    const mathModule2Id = moduleIds.find(m => m.order === 4).id;
-    for (let i = 0; i < 2; i++) {
-      await client.query(`
-        INSERT INTO module_questions (module_id, question_id, order_number)
-        VALUES ($1, $2, $3)
-      `, [mathModule2Id, mathQuestionIds[i + 2], i]);
-    }
-    console.log(`Linked 2 questions to Math Module 2`);
     
     await client.query('COMMIT');
     
-    console.log('\nSample test created successfully!');
-    console.log(`Test ID: ${testId}`);
-    console.log(`Test Name: sample test 1`);
-    console.log(`Test Code: 1A2B3C`);
-    console.log('\nModules created:');
-    moduleIds.forEach((module, index) => {
-      const moduleData = modules[index];
-      console.log(`  ${moduleData.order}. ${moduleData.name} (ID: ${module.id})`);
+    console.log('\n' + '='.repeat(70));
+    console.log('Full-length adaptive SAT test created successfully!');
+    console.log('='.repeat(70));
+    console.log(`\nTest ID: ${testId}`);
+    console.log(`Test Name: SAT Practice Test - Full Length`);
+    console.log(`Test Code: SATFL1`);
+    
+    console.log('\n' + '-'.repeat(70));
+    console.log('MODULES CREATED:');
+    console.log('-'.repeat(70));
+    
+    const rwModules = moduleData.filter(m => m.subject === 'Reading and Writing');
+    const mathModules = moduleData.filter(m => m.subject === 'Math');
+    
+    console.log('\nReading & Writing Modules:');
+    rwModules.forEach((module) => {
+      const questionCount = questionsByModule[module.id]?.length || 0;
+      console.log(`  ${module.order}. ${module.name}`);
+      console.log(`     - Difficulty: ${module.difficulty}`);
+      console.log(`     - Questions: ${questionCount}`);
+      console.log(`     - ID: ${module.id}`);
     });
     
-    console.log('\nQuestion distribution:');
-    console.log(`  RW Module 1: ${rwQuestionIds.slice(0, 2).join(', ')}`);
-    console.log(`  RW Module 2: ${rwQuestionIds.slice(2, 4).join(', ')}`);
-    console.log(`  Math Module 1: ${mathQuestionIds.slice(0, 2).join(', ')}`);
-    console.log(`  Math Module 2: ${mathQuestionIds.slice(2, 4).join(', ')}`);
+    console.log('\nMath Modules:');
+    mathModules.forEach((module) => {
+      const questionCount = questionsByModule[module.id]?.length || 0;
+      console.log(`  ${module.order}. ${module.name}`);
+      console.log(`     - Difficulty: ${module.difficulty}`);
+      console.log(`     - Questions: ${questionCount}`);
+      console.log(`     - ID: ${module.id}`);
+    });
+    
+    console.log('\n' + '-'.repeat(70));
+    console.log('ADAPTIVE TESTING FLOW:');
+    console.log('-'.repeat(70));
+    console.log('1. Students begin with RW Module 1 (medium difficulty)');
+    console.log('2. Based on Module 1 performance:');
+    console.log('   - Score < 60% → Module 2 (Easier)');
+    console.log('   - Score ≥ 60% → Module 2 (Harder)');
+    console.log('3. Same adaptive pattern for Math modules');
+    console.log('4. Final SAT score (400-1600) calculated from both sections');
+    
+    const totalQuestions = Object.values(questionsByModule).reduce((sum, questions) => sum + questions.length, 0);
+    const rwQuestionsPerTest = 27 * 2; // Student takes 2 RW modules
+    const mathQuestionsPerTest = 22 * 2; // Student takes 2 Math modules
+    const studentTotalQuestions = rwQuestionsPerTest + mathQuestionsPerTest;
+    
+    console.log('\n' + '-'.repeat(70));
+    console.log(`Total Modules Available: ${moduleData.length}`);
+    console.log(`Total Questions in Bank: ${totalQuestions}`);
+    console.log(`Student will complete: 4 modules (${studentTotalQuestions} questions)`);
+    console.log(`  - Reading & Writing: 2 modules × 27 = ${rwQuestionsPerTest} questions`);
+    console.log(`  - Math: 2 modules × 22 = ${mathQuestionsPerTest} questions`);
+    console.log('-'.repeat(70));
     
   } catch (error) {
     await client.query('ROLLBACK');
